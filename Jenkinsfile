@@ -17,9 +17,12 @@ pipeline {
 
         stage('Setup Python') {
             steps {
-                bat 'python -m venv venv'
-                bat 'call venv\\Scripts\\activate && python -m pip install --upgrade pip'
-                bat 'call venv\\Scripts\\activate && pip install -r requirements.txt'
+                bat '''
+                    python -m venv venv
+                    call venv\\Scripts\\activate
+                    pip install --upgrade pip
+                    pip install -r requirements.txt
+                '''
             }
         }
 
@@ -27,14 +30,14 @@ pipeline {
             steps {
                 bat '''
                     if exist publish (
-                        powershell -Command "Remove-Item -Recurse -Force publish"
+                        rmdir /s /q publish
                     )
                     mkdir publish
                     xcopy /E /I /Y app publish\\app
                     copy app.py publish\\
                     copy requirements.txt publish\\
                     copy web.config publish\\
-                    powershell Compress-Archive -Path publish\\* -DestinationPath publish.zip
+                    powershell -Command "Compress-Archive -Path publish\\* -DestinationPath publish.zip -Force"
                 '''
             }
         }
