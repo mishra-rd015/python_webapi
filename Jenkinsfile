@@ -25,7 +25,6 @@ pipeline {
 
         stage('Package Application') {
             steps {
-                // Only remove if exists
                 bat '''
                     if exist publish (
                         powershell -Command "Remove-Item -Recurse -Force publish"
@@ -35,13 +34,20 @@ pipeline {
                     copy app.py publish\\
                     copy requirements.txt publish\\
                     copy web.config publish\\
+                    powershell Compress-Archive -Path publish\\* -DestinationPath publish.zip
                 '''
             }
         }
 
         stage('Deploy to Azure') {
             steps {
-                withCredentials([azureServicePrincipal('azure-sp')]) {
+                withCredentials([azureServicePrincipal(
+                    credentialsId: 'azure-service-principal-python',
+                    subscriptionIdVariable: 'AZURE_SUBSCRIPTION_ID',
+                    clientIdVariable: 'AZURE_CLIENT_ID',
+                    clientSecretVariable: 'AZURE_CLIENT_SECRET',
+                    tenantIdVariable: 'AZURE_TENANT_ID'
+                )]) {
                     bat '''
                         az login --service-principal -u %AZURE_CLIENT_ID% -p %AZURE_CLIENT_SECRET% --tenant %AZURE_TENANT_ID%
                         az webapp deployment source config-zip --resource-group %AZURE_RESOURCE_GROUP% --name %AZURE_WEBAPP_NAME% --src publish.zip
