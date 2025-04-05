@@ -2,15 +2,16 @@ pipeline {
     agent any
 
     environment {
-        AZURE_CREDENTIALS_ID = 'azure-service-principal-python'
-        RESOURCE_GROUP = 'rg-jenkins'
-        APP_SERVICE_NAME = 'pythonwebapijenkins8387963808'
+        AZURE_WEBAPP_NAME = 'flaskwebapi-rd015'
+        AZURE_RESOURCE_GROUP = 'flask-rg'
+        AZURE_APP_PLAN = 'flaskappplan'
+        AZURE_LOCATION = 'eastus'
     }
 
     stages {
         stage('Checkout Code') {
             steps {
-                git branch: 'main', url: 'https://github.com/mishra-rd015/python_webapi.git'
+                git url: 'https://github.com/mishra-rd015/python_webapi.git', branch: 'main'
             }
         }
 
@@ -24,20 +25,26 @@ pipeline {
 
         stage('Package Application') {
             steps {
-                bat 'powershell -Command "Remove-Item -Recurse -Force publish -ErrorAction SilentlyContinue"'
-                bat 'powershell -Command "New-Item -ItemType Directory -Path publish"'
-                bat 'powershell -Command "Copy-Item @(\\"app.py\\", \\"requirements.txt\\", \\"startup.txt\\") -Destination publish -Force"'
-                bat 'powershell -Command "Compress-Archive -Path publish\\* -DestinationPath publish.zip -Force"'
+                // Only remove if exists
+                bat '''
+                    if exist publish (
+                        powershell -Command "Remove-Item -Recurse -Force publish"
+                    )
+                    mkdir publish
+                    xcopy /E /I /Y app publish\\app
+                    copy app.py publish\\
+                    copy requirements.txt publish\\
+                    copy web.config publish\\
+                '''
             }
         }
 
         stage('Deploy to Azure') {
             steps {
-                withCredentials([azureServicePrincipal(credentialsId: "${env.AZURE_CREDENTIALS_ID}")]) {
+                withCredentials([azureServicePrincipal('azure-sp')]) {
                     bat '''
-                        az login --service-principal -u "%AZURE_CLIENT_ID%" -p "%AZURE_CLIENT_SECRET%" --tenant "%AZURE_TENANT_ID%"
-                        az webapp config appsettings set --resource-group "%RESOURCE_GROUP%" --name "%APP_SERVICE_NAME%" --settings SCM_DO_BUILD_DURING_DEPLOYMENT=true PORT=8000
-                        az webapp deploy --resource-group "%RESOURCE_GROUP%" --name "%APP_SERVICE_NAME%" --src-path publish.zip --type zip
+                        az login --service-principal -u %AZURE_CLIENT_ID% -p %AZURE_CLIENT_SECRET% --tenant %AZURE_TENANT_ID%
+                        az webapp deployment source config-zip --resource-group %AZURE_RESOURCE_GROUP% --name %AZURE_WEBAPP_NAME% --src publish.zip
                     '''
                 }
             }
